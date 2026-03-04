@@ -3,29 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ルーレット共有（修正版）</title>
+    <title>本格ルーレット共有</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        :root { --green: #1b5e20; --red: #d32f2f; --black: #212121; --gold: #ffd700; }
+        :root { --green: #006400; --red: #d32f2f; --black: #212121; --gold: #ffd700; }
         body { font-family: sans-serif; margin: 0; background: var(--green); color: white; text-align: center; }
-        
-        /* セクション管理 */
-        .page { display: none; padding: 20px; }
+        .page { display: none; padding: 10px; }
         .active { display: block; }
 
-        .btn { padding: 15px 30px; margin: 10px; border: none; border-radius: 10px; font-weight: bold; font-size: 18px; cursor: pointer; width: 80%; max-width: 300px; }
+        /* レイアウト：画像に近いテーブル配置 */
+        .roulette-table { margin: 10px auto; border-collapse: collapse; background: white; color: white; font-size: 14px; }
+        .roulette-table td { border: 1px solid white; width: 40px; height: 50px; text-align: center; cursor: pointer; position: relative; }
+        .n-red { background: var(--red); }
+        .n-black { background: var(--black); }
+        .n-green { background: #2e7d32; }
+        .outside { background: var(--green); color: white; font-size: 11px; }
+
+        /* ボタン */
+        .btn { padding: 15px; margin: 10px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; width: 80%; }
         .btn-oya { background: var(--gold); color: black; }
         .btn-ko { background: white; color: black; }
 
-        /* ボード */
-        .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; width: 100%; max-width: 300px; margin: 10px auto; background: white; border: 2px solid white; }
-        .cell { background: var(--green); height: 50px; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; }
-        .cell.red { background: var(--red); }
-        .cell.black { background: var(--black); }
-
-        #admin-panel { background: rgba(0,0,0,0.9); padding: 20px; position: fixed; bottom: 0; width: 100%; left: 0; box-sizing: border-box; border-top: 3px solid var(--gold); }
-        input { padding: 12px; width: 70%; font-size: 16px; border-radius: 5px; border: none; margin-bottom: 10px; }
-        #qrcode { background: white; padding: 10px; display: inline-block; margin-top: 10px; }
+        #admin-panel { background: rgba(0,0,0,0.9); padding: 15px; position: fixed; bottom: 0; width: 100%; left: 0; box-sizing: border-box; }
+        #qrcode { background: white; padding: 10px; display: inline-block; margin: 10px auto; }
+        #qrcode img { margin: 0 auto; }
     </style>
 </head>
 <body>
@@ -35,23 +36,42 @@
     <button class="btn btn-oya" onclick="startAs('oya')">👑 親（胴元）として開始</button>
     <button class="btn btn-ko" onclick="startAs('ko')">👤 子（参加者）として開始</button>
     
-    <div id="qr-display" style="display:none; margin-top: 20px;">
-        <p>子にこのQRを読ませてください</p>
+    <div id="qr-area" style="display:none; margin-top: 20px;">
+        <p>子に読ませてください</p>
         <div id="qrcode"></div>
+        <p id="room-url" style="font-size: 10px; word-break: break-all;"></p>
+        <button class="btn" onclick="goToGame()" style="background:orange;">QRを閉じてゲーム画面へ</button>
     </div>
 </div>
 
 <div id="page-game" class="page">
-    <h3 id="role-title"></h3>
-    <div id="result-bar" style="background: #fff176; color: black; padding: 10px; font-weight: bold; margin-bottom: 10px; border-radius: 5px;">
-        まだ結果は出ていません
+    <div id="result-msg" style="background: yellow; color: black; font-weight: bold; padding: 5px; margin-bottom: 5px;">
+        結果待ち...
     </div>
-    
-    <div class="board" id="board-container"></div>
+
+    <table class="roulette-table">
+        <tr>
+            <td rowspan="3" class="n-green" onclick="bet('0')">0</td>
+            <td class="n-red" onclick="bet(3)">3</td><td class="n-black" onclick="bet(6)">6</td><td class="n-red" onclick="bet(9)">9</td>
+        </tr>
+        <tr>
+            <td class="n-black" onclick="bet(2)">2</td><td class="n-red" onclick="bet(5)">5</td><td class="n-black" onclick="bet(8)">8</td>
+        </tr>
+        <tr>
+            <td class="n-red" onclick="bet(1)">1</td><td class="n-black" onclick="bet(4)">4</td><td class="n-red" onclick="bet(7)">7</td>
+        </tr>
+        <tr>
+            <td class="outside" colspan="1" onclick="bet('1-18')">1-18</td>
+            <td class="outside" colspan="1" onclick="bet('EVEN')">EVEN</td>
+            <td class="outside" colspan="1" onclick="bet('RED')" style="background:red;">RED</td>
+            <td class="outside" colspan="1" onclick="bet('BLACK')" style="background:black;">BLACK</td>
+        </tr>
+    </table>
+    <p style="font-size: 10px;">※複数箇所タップして賭けられます</p>
 
     <div id="admin-panel" style="display:none;">
-        <input id="input-win-num" type="number" placeholder="当選番号">
-        <button class="btn btn-oya" onclick="sendResult()" style="width:100%; margin:0;">結果を全員に通知</button>
+        <input id="win-num" type="text" placeholder="当選番号" style="padding:10px; width:60%;">
+        <button onclick="sendResult()" style="padding:10px; background:var(--gold);">確定</button>
     </div>
 </div>
 
@@ -74,78 +94,53 @@
     let roomId = new URLSearchParams(window.location.search).get("room");
     let myRole = "";
 
-    // ボードを生成する関数
-    function createBoard() {
-        const redNums = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
-        const container = document.getElementById('board-container');
-        container.innerHTML = ""; // 一旦クリア
-        for(let i=1; i<=36; i++) {
-            let div = document.createElement('div');
-            div.className = `cell ${redNums.includes(i) ? 'red' : 'black'}`;
-            div.innerText = i;
-            div.onclick = () => { if(myRole === 'ko') placeBet(i); };
-            container.appendChild(div);
-        }
-    }
-
-    // 役割決定後の切り替え
     window.startAs = function(role) {
         myRole = role;
-        
-        // 画面切り替え
+        if (role === 'oya') {
+            // 親：必ず新しい部屋を作る、または現在の部屋を維持
+            if (!roomId) roomId = Math.random().toString(36).substring(2, 8);
+            const url = window.location.origin + window.location.pathname + "?room=" + roomId;
+            
+            // QR強制表示
+            document.getElementById('qr-area').style.display = 'block';
+            document.getElementById('room-url').innerText = url;
+            const qrElem = document.getElementById("qrcode");
+            qrElem.innerHTML = "";
+            new QRCode(qrElem, { text: url, width: 150, height: 150 });
+            
+            window.history.pushState({}, '', url);
+        } else {
+            goToGame();
+        }
+    };
+
+    window.goToGame = function() {
         document.getElementById('page-select').classList.remove('active');
         document.getElementById('page-game').classList.add('active');
-        document.getElementById('role-title').innerText = (role === 'oya' ? "👑 親画面" : "👤 子画面");
-
-        if(role === 'oya') {
-            document.getElementById('admin-panel').style.display = 'block';
-            if(!roomId) {
-                // ルームID生成とQR表示
-                roomId = Math.random().toString(36).substring(2, 8);
-                const url = window.location.origin + window.location.pathname + "?room=" + roomId;
-                document.getElementById('qr-display').style.display = 'block';
-                document.getElementById('page-select').classList.add('active'); // QRを見せるために一時的に戻す
-                document.getElementById('page-game').classList.remove('active');
-                new QRCode(document.getElementById("qrcode"), url);
-                window.history.pushState({}, '', url);
-            }
-        }
-        createBoard();
-        listenFirebase();
+        if (myRole === 'oya') document.getElementById('admin-panel').style.display = 'block';
+        listenData();
     };
 
-    // 子が賭ける
-    function placeBet(num) {
-        if(!roomId) return;
-        push(ref(db, `rooms/${roomId}/bets`), { num: num });
-        alert(num + "番に賭けました！");
-    }
+    window.bet = function(val) {
+        if (myRole !== 'ko') return;
+        if (!roomId) return alert("ルームIDがありません");
+        push(ref(db, `rooms/${roomId}/bets`), { val: val, user: "Player" });
+        alert(val + " に賭けました");
+    };
 
-    // 親が結果を送る
     window.sendResult = function() {
-        const num = document.getElementById('input-win-num').value;
-        if(!num) return alert("番号を入れてください");
-        set(ref(db, `rooms/${roomId}/result`), {
-            winNum: num,
-            msg: `🎉 当選番号は 【 ${num} 】 です！`
-        });
-        // 親の画面も一旦ゲーム画面へ
-        document.getElementById('qr-display').style.display = 'none';
-        document.getElementById('page-game').classList.add('active');
+        const val = document.getElementById('win-num').value;
+        set(ref(db, `rooms/${roomId}/result`), { val: val });
     };
 
-    // Firebase受信監視
-    function listenFirebase() {
-        if(!roomId) return;
-        onValue(ref(db, `rooms/${roomId}/result`), (snapshot) => {
-            if(snapshot.exists()) {
-                document.getElementById('result-bar').innerText = snapshot.val().msg;
+    function listenData() {
+        if (!roomId) return;
+        onValue(ref(db, `rooms/${roomId}/result`), (snap) => {
+            if (snap.exists()) {
+                document.getElementById('result-msg').innerText = "当選番号： " + snap.val().val;
             }
         });
     }
-
-    // すでにURLにルームIDがある場合は「子」のボタンを目立たせる等の処理も可能
 </script>
-
 </body>
 </html>
