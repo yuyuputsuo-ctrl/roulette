@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ルーレット共有ルーム</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; background: #f4f4f9; color: #333; }
+        .container { max-width: 400px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h2 { color: #d32f2f; margin-bottom: 20px; }
+        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; font-size: 16px; }
+        button { background: #d32f2f; color: white; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        button:active { transform: scale(0.98); }
+        #qrcode { display: flex; justify-content: center; margin: 15px 0; }
+        .result-display { margin-top: 20px; padding: 15px; background: #fff9c4; border-radius: 10px; font-weight: bold; border-left: 5px solid #fbc02d; }
+        .room-info { font-size: 12px; color: #666; word-break: break-all; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🎰 ルーレット共有</h2>
+    
+    <button onclick="createRoom()">1. ルームを作成(親)</button>
+    <div id="qrcode"></div>
+    <div id="roomLink" class="room-info"></div>
+
+    <hr>
+
+    <input id="userName" placeholder="あなたの名前">
+    <input id="betNum" type="number" placeholder="賭ける番号 (0-36)">
+    <input id="betAmt" type="number" placeholder="賭け金">
+    <input id="resNum" type="number" placeholder="【親】当選番号を入力">
+
+    <button onclick="sendData()">2. 結果を全員に送信</button>
+
+    <div class="result-display" id="output">
+        ここに結果が表示されます
+    </div>
+</div>
+
+<script type="module">
+    // Firebase SDKの読み込み
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    // --- あなたの専用設定 ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyAQF7yOvsHJm_XCoEJEIO_odkrp2rdX24A",
+        authDomain: "roulette-free.firebaseapp.com",
+        // databaseURL はプロジェクトIDから自動生成されます
+        databaseURL: "https://roulette-free-default-rtdb.firebaseio.com", 
+        projectId: "roulette-free",
+        storageBucket: "roulette-free.firebasestorage.app",
+        messagingSenderId: "93578993705",
+        appId: "1:93578993705:web:58e22e28ad6e28f4e77c38"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    let roomId = new URLSearchParams(window.location.search).get("room");
+
+    // ルーム作成機能
+    window.createRoom = function() {
+        const newId = Math.random().toString(36).substring(2, 8);
+        const url = window.location.origin + window.location.pathname + "?room=" + newId;
+        document.getElementById("roomLink").innerText = "共有URL: " + url;
+        document.getElementById("qrcode").innerHTML = "";
+        new QRCode(document.getElementById("qrcode"), { text: url, width: 160, height: 160 });
+    };
+
+    // データ送信機能
+    window.sendData = function() {
+        if (!roomId) { alert("QRコードから参加するか、ルームを作成してください"); return; }
+        const name = document.getElementById("userName").value || "名無し";
+        const bet = Number(document.getElementById("betNum").value);
+        const amt = Number(document.getElementById("betAmt").value);
+        const res = Number(document.getElementById("resNum").value);
+
+        const isWin = (bet === res);
+        const payout = isWin ? amt * 36 : 0;
+        const message = `${name}さん：${res}番！ ${isWin ? '当たり🎯 払戻' + payout : 'ハズレ💀'}`;
+        
+        set(ref(db, "rooms/" + roomId), { msg: message });
+    };
+
+    // リアルタイム同期
+    if (roomId) {
+        onValue(ref(db, "rooms/" + roomId), (snapshot) => {
+            if (snapshot.exists()) {
+                document.getElementById("output").innerText = snapshot.val().msg;
+            }
+        });
+    }
+</script>
+
+</body>
+</html>
