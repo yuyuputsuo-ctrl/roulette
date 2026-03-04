@@ -2,55 +2,66 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ルーレット共有ルーム</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ルーレット共有（親・子切り替え版）</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 20px; background: #f4f4f9; color: #333; }
-        .container { max-width: 400px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        h2 { color: #d32f2f; margin-bottom: 20px; }
-        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; font-size: 16px; }
-        button { background: #d32f2f; color: white; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; }
-        button:active { transform: scale(0.98); }
-        #qrcode { display: flex; justify-content: center; margin: 15px 0; }
-        .result-display { margin-top: 20px; padding: 15px; background: #fff9c4; border-radius: 10px; font-weight: bold; border-left: 5px solid #fbc02d; }
-        .room-info { font-size: 12px; color: #666; word-break: break-all; }
+        :root { --green: #1b5e20; --red: #d32f2f; --black: #212121; --gold: #ffd700; }
+        body { font-family: sans-serif; margin: 0; background: var(--green); color: white; text-align: center; }
+        
+        /* 役割選択画面 */
+        #role-select { padding: 50px 20px; }
+        .btn { padding: 15px 30px; margin: 10px; border: none; border-radius: 10px; font-weight: bold; font-size: 18px; cursor: pointer; }
+        .btn-oya { background: var(--gold); color: black; }
+        .btn-ko { background: white; color: black; }
+
+        /* ボード（簡易版から画像のデザインへ寄せていきます） */
+        .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; width: 90%; max-width: 300px; margin: 10px auto; background: white; border: 2px solid white; }
+        .cell { background: var(--green); height: 50px; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; border: 1px solid #4caf50; }
+        .cell.red { background: var(--red); }
+        .cell.black { background: var(--black); }
+
+        /* 親専用パネル */
+        #admin-panel { background: rgba(0,0,0,0.8); padding: 20px; border-top: 2px solid var(--gold); position: fixed; bottom: 0; width: 100%; box-sizing: border-box; }
+        input { padding: 10px; width: 80%; margin-bottom: 10px; border-radius: 5px; border: none; }
+        
+        #qrcode { background: white; padding: 10px; display: inline-block; margin-top: 10px; }
+        .hide { display: none; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>🎰 ルーレット共有</h2>
+<div id="role-select">
+    <h2>🎰 役割を選んでください</h2>
+    <button class="btn btn-oya" onclick="initRole('oya')">親（胴元）として開始</button>
+    <button class="btn btn-ko" onclick="initRole('ko')">子（参加者）として開始</button>
+    <div id="qr-area" class="hide">
+        <p>子にこのQRを読ませてください</p>
+        <div id="qrcode"></div>
+    </div>
+</div>
+
+<div id="game-view" class="hide">
+    <h3 id="display-role"></h3>
+    <div id="status-msg" style="background: yellow; color: black; padding: 5px;"></div>
     
-    <button onclick="createRoom()">1. ルームを作成(親)</button>
-    <div id="qrcode"></div>
-    <div id="roomLink" class="room-info"></div>
+    <div class="board" id="board">
+        </div>
 
-    <hr>
-
-    <input id="userName" placeholder="あなたの名前">
-    <input id="betNum" type="number" placeholder="賭ける番号 (0-36)">
-    <input id="betAmt" type="number" placeholder="賭け金">
-    <input id="resNum" type="number" placeholder="【親】当選番号を入力">
-
-    <button onclick="sendData()">2. 結果を全員に送信</button>
-
-    <div class="result-display" id="output">
-        ここに結果が表示されます
+    <div id="admin-panel" class="hide">
+        <input id="win-num" type="number" placeholder="当選番号を入力">
+        <button class="btn btn-oya" onclick="sendResult()" style="width:100%">当選番号を確定・通知</button>
     </div>
 </div>
 
 <script type="module">
-    // Firebase SDKの読み込み
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    import { getDatabase, ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-    // --- あなたの専用設定 ---
     const firebaseConfig = {
         apiKey: "AIzaSyAQF7yOvsHJm_XCoEJEIO_odkrp2rdX24A",
         authDomain: "roulette-free.firebaseapp.com",
-        // databaseURL はプロジェクトIDから自動生成されます
-        databaseURL: "https://roulette-free-default-rtdb.asia-southeast1.firebasedatabase.app/", 
+        databaseURL: "https://roulette-free-default-rtdb.firebaseio.com", 
         projectId: "roulette-free",
         storageBucket: "roulette-free.firebasestorage.app",
         messagingSenderId: "93578993705",
@@ -60,41 +71,76 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     let roomId = new URLSearchParams(window.location.search).get("room");
+    let myRole = "";
 
-    // ルーム作成機能
-    window.createRoom = function() {
-        const newId = Math.random().toString(36).substring(2, 8);
-        const url = window.location.origin + window.location.pathname + "?room=" + newId;
-        document.getElementById("roomLink").innerText = "共有URL: " + url;
-        document.getElementById("qrcode").innerHTML = "";
-        new QRCode(document.getElementById("qrcode"), { text: url, width: 160, height: 160 });
+    // ボード生成
+    const redNums = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
+    const board = document.getElementById('board');
+    for(let i=1; i<=36; i++){
+        let div = document.createElement('div');
+        div.className = `cell ${redNums.includes(i) ? 'red' : 'black'}`;
+        div.innerText = i;
+        div.onclick = () => { if(myRole === 'ko') placeBet(i); };
+        board.appendChild(div);
+    }
+
+    // 初期化
+    window.initRole = function(role) {
+        myRole = role;
+        document.getElementById('role-select').classList.add('hide');
+        document.getElementById('game-view').classList.remove('hide');
+        document.getElementById('display-role').innerText = role === 'oya' ? "👑 親画面" : "👤 子画面";
+
+        if(role === 'oya') {
+            document.getElementById('admin-panel').classList.remove('hide');
+            if(!roomId) {
+                roomId = Math.random().toString(36).substring(2, 8);
+                const url = window.location.origin + window.location.pathname + "?room=" + roomId;
+                document.getElementById('qr-area').classList.remove('hide');
+                new QRCode(document.getElementById("qrcode"), url);
+                window.history.pushState({}, '', url);
+            }
+        }
+        startListen();
     };
 
-    // データ送信機能
-    window.sendData = function() {
-        if (!roomId) { alert("QRコードから参加するか、ルームを作成してください"); return; }
-        const name = document.getElementById("userName").value || "名無し";
-        const bet = Number(document.getElementById("betNum").value);
-        const amt = Number(document.getElementById("betAmt").value);
-        const res = Number(document.getElementById("resNum").value);
+    // 子：賭ける（複数回可能）
+    function placeBet(num) {
+        if(!roomId) return;
+        // pushを使うことで、上書きせずに履歴として追加
+        const betRef = ref(db, `rooms/${roomId}/bets`);
+        push(betRef, {
+            num: num,
+            time: Date.now()
+        });
+        alert(num + "番に賭けました！");
+    }
 
-        const isWin = (bet === res);
-        const payout = isWin ? amt * 36 : 0;
-        const message = `${name}さん：${res}番！ ${isWin ? '当たり🎯 払戻' + payout : 'ハズレ💀'}`;
-        
-        set(ref(db, "rooms/" + roomId), { msg: message });
+    // 親：結果送信
+    window.sendResult = function() {
+        const num = document.getElementById('win-num').value;
+        set(ref(db, `rooms/${roomId}/result`), {
+            winNum: num,
+            msg: `🎉 当選番号は 【 ${num} 】 です！`
+        });
     };
 
-    // リアルタイム同期
-    if (roomId) {
-        onValue(ref(db, "rooms/" + roomId), (snapshot) => {
-            if (snapshot.exists()) {
-                document.getElementById("output").innerText = snapshot.val().msg;
+    // 同期受信
+    function startListen() {
+        if(!roomId) return;
+        // 結果の監視
+        onValue(ref(db, `rooms/${roomId}/result`), (snapshot) => {
+            if(snapshot.exists()) {
+                document.getElementById('status-msg').innerText = snapshot.val().msg;
             }
         });
     }
+
+    // URLに最初からルームIDがあれば自動で「子」の準備
+    if(roomId && !myRole) {
+        // 自動で子として開始させることも可能ですが、今は選択させます
+    }
+
 </script>
-
 </body>
-
 </html>
